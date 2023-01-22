@@ -1,0 +1,42 @@
+const token = "MTA2NjcxNDUwNDk1MzU5Mzg4Ng.G-bocY.P7ClCxa0B26lT8fZQcBZVCq22XSat1tJDNaAzA";
+const applicationID = "1066714504953593886";
+
+const { REST, Routes, Embed, EmbedBuilder, channelLink, ReactionUserManager, InteractionCollector, ApplicationCommandOptionType, moveElementInArray } = require('discord.js');
+const commands = [
+  {
+    name: "ping",
+    description:"????"
+  }
+];
+
+//
+const rest = new REST({ version: '10' }).setToken(token);
+
+(async () => {
+  try {
+    console.log('Started refreshing application (/) commands.');
+
+    await rest.put(Routes.applicationCommands(applicationID), { body: commands });
+
+    console.log('Successfully reloaded application (/) commands.');
+  } catch (error) {
+    console.error(error);
+  }
+})();
+const { Client, GatewayIntentBits } = require('discord.js');
+const client = new Client({ intents: [GatewayIntentBits.Guilds,GatewayIntentBits.GuildMessages,GatewayIntentBits.MessageContent] });
+
+
+
+
+client.on('interactionCreate', async interaction => {
+    if (!interaction.isChatInputCommand()) return;
+
+  if(interaction.commandName === "ping"){
+      await interaction.reply("pong");
+  }
+
+
+
+}) 
+client.login(token);
