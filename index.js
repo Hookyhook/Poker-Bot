@@ -1,11 +1,14 @@
-const token = "MTA2NjcxNDUwNDk1MzU5Mzg4Ng.G-bocY.P7ClCxa0B26lT8fZQcBZVCq22XSat1tJDNaAzA";
+const token = "MTA2NjcxNDUwNDk1MzU5Mzg4Ng.GNx_k8.zkmACJAUKSaEe67kpAENPmq2GwYH-yW9vpoVcU";
 const applicationID = "1066714504953593886";
 
 const { REST, Routes, Embed, EmbedBuilder, channelLink, ReactionUserManager, InteractionCollector, ApplicationCommandOptionType, moveElementInArray } = require('discord.js');
+
+const poker = require("./poker");
+
 const commands = [
   {
-    name: "ping",
-    description:"????"
+    name: "startgame",
+    description:"Starts a Game of Poker"
   }
 ];
 
@@ -32,8 +35,19 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds,GatewayIntentBits
 client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
 
-  if(interaction.commandName === "ping"){
-      await interaction.reply("pong");
+  if (interaction.commandName === "startgame") {
+    var table = poker.gameStart();
+    const embed = new EmbedBuilder()
+            .setColor('Grey')
+            .setTitle("New Game")
+            .addFields(
+                {
+                    name: "The cards on the table are:",
+                    value: table.card1+ " "+table.card2+" "+table.card3,
+                    inline: true,
+                }
+            );
+            interaction.reply({ embeds: [embed], ephemeral: true});
   }
 
 
