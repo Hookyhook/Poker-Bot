@@ -16,19 +16,37 @@ const {
   Collection,
 } = require("discord.js");
 
-var games = [];
+let registeredUsers = [];
 
 exports.gameStart = (interaction) => {
-  return newGame(interaction);
+  var game;
+
+  game = newGame(interaction, game);
+  const collector = interaction.channel.createMessageComponentCollector();
+  collector.on("collect", async (i) => {
+    if (i.customId === "JOIN") {
+      addPlayer(i, interaction, game);
+    }
+    if (i.customId === "LEAVE") {
+      removePlayer(i, interaction, game);
+    }
+  });
+  collector.on("end", (collected) =>
+    console.log(`Collected ${collected.size} items`)
+  );
 };
 
-function newGame(interaction) {
-  if (searchGame(interaction) == undefined) {
+function newGame(interaction, game) {
+  if (!checkforPlayer(interaction)) {
     var deck = createDeck();
     var table = createTable(deck);
     var gameid = interaction.user.id;
     var members = [];
-    var member = {username: interaction.user.username ,memberid: interaction.user.id, hand: dealHand(deck) };
+    var member = {
+      username: interaction.user.username,
+      memberid: interaction.user.id,
+      hand: dealHand(deck),
+    };
     members.push(member);
     var game = {
       gameid: gameid,
@@ -36,15 +54,14 @@ function newGame(interaction) {
       deck: deck,
       table: table,
     };
-    games.push(game);
-    const embed = new EmbedBuilder()
+    var embed = new EmbedBuilder()
       .setColor("Black")
       .setTitle("New Game")
       .addFields(
-          {
-              name: "WOW a new POKER GAME!",
-              value: "@here",
-              inline: false,
+        {
+          name: "WOW a new POKER GAME!",
+          value: "@here",
+          inline: false,
         },
         {
           name: "Players Joined:",
@@ -54,8 +71,16 @@ function newGame(interaction) {
       );
     let Buttons = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
+        .setCustomId("START")
+        .setLabel("Start!")
+        .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
         .setCustomId("JOIN")
         .setLabel("Join!")
+        .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId("LEAVE")
+        .setLabel("Leave!")
         .setStyle(ButtonStyle.Primary)
     );
     interaction.reply({
@@ -63,34 +88,18 @@ function newGame(interaction) {
       ephemeral: false,
       components: [Buttons],
     });
+    registeredUsers.push(interaction.user.id);
+    return game;
   } else {
-    const embed = new EmbedBuilder()
-      .setColor("Red")
-      .setTitle("Error")
-      .addFields({
-        name: "Channel Error",
-        value:
-          "You already created a game that is still active!!! Finish it before you start a new one!",
-        inline: true,
-      });
-    interaction.reply({ embeds: [embed], ephemeral: false });
-    }
-    const collector = interaction.channel.createMessageComponentCollector();
-
-    collector.on("collect", async i => {
-        
-        if (i.user.id !== interaction.user.id) {
-            return;
-        }
-        if (i.message.interaction.id !== interaction.id) {
-            return
-        }
-        if (i.customId === "JOIN") {
-            addPlayer(i, interaction);
-            collector.stop();
-        }
+    var embed = new EmbedBuilder().setColor("Red").setTitle("Error").addFields({
+      name: "Channel Error",
+      value:
+        "You already part of a game that is still active!!! Finish it before you start a new one!",
+      inline: true,
     });
-    collector.on('end', collected => console.log(`Collected ${collected.size} items`));
+    interaction.reply({ embeds: [embed], ephemeral: true });
+    return;
+  }
 }
 
 function createDeck() {
@@ -136,63 +145,124 @@ function dealHand(d) {
   return { card1: d.pop(), card2: d.pop() };
 }
 
-function addPlayer(i, interaction) {
-    var game = searchGame(interaction);
-    game.members.push({ username: i.user.username ,meberid: i.user.id, hand: dealHand(game.deck) });
-    var usernames = "";
-    for (const member of game.members) {
-        usernames += member.username + "\n";
+function addPlayer(i, interaction, game) {
+  game.members.push({
+    username: i.user.username,
+    meberid: i.user.id,
+    hand: dealHand(game.deck),
+  });
+  updateStartMessage(i, interaction, game);
+}
+
+function checkforPlayer(interaction) {
+  var joined = false;
+  for (const player of registeredUsers) {
+    if (player == interaction.user.id) {
+      joined = true;
     }
-    const embed = new EmbedBuilder()
-      .setColor("Black")
-      .setTitle("New Game")
-      .addFields(
-          {
-              name: "WOW a new POKER GAME!",
-              value: "@here",
-              inline: false,
-        },
-        {
-          name: "Players Joined:",
-          value: usernames,
-          inline: false,
-        }
-      );
-    let Buttons = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId("JOIN")
-        .setLabel("Join!")
-        .setStyle(ButtonStyle.Primary)
+  }
+  return joined;
+}
+
+function removePlayer(i, interaction, game) {
+  var joined = false;
+  searchValue = {id: i.user.id};
+  game.members = game.members.filter(obj => obj.name !== searchValue);
+  var embed;
+  for (const member of game.members) {
+    if ((member.id == i.user.id)) {
+      joined = true;
+    }
+  }
+  if (!joined) {
+     embed = new EmbedBuilder()
+    .setColor("Red")
+    .setTitle("You left the game")
+    .addFields(
+      {
+        name: "Poker Game",
+        value: "You left the game!",
+        inline: false,
+      }
+      
     );
-    interaction.editReply({
+    //i.replied = true;
+    //updateStartMessage(i, interaction, game);
+  } else {
+     embed = new EmbedBuilder()
+    .setColor("Red")
+    .setTitle("Error")
+    .addFields(
+      {
+        name: "Poker Game",
+        value: "You can'not leave a game you did never join!",
+        inline: false,
+      }
+    );
+  }
+  if(i.replied){
+    i.followUp({
+      embeds: [embed],
+      ephemeral: true,
+      components: [],
+    });
+  }else{
+    i.reply({
+      embeds: [embed],
+      ephemeral: true,
+      components: [],
+    });
+  }
+  console.log(game.members);
+
+}
+
+function updateStartMessage(i, interaction, game){
+  var usernames = "";
+  for (const member of game.members) {
+    usernames += member.username + "\n";
+  }
+  const embed = new EmbedBuilder()
+    .setColor("Black")
+    .setTitle("New Game")
+    .addFields(
+      {
+        name: "WOW a new POKER GAME!",
+        value: "@here",
+        inline: false,
+      },
+      {
+        name: "Players Joined:",
+        value: usernames,
+        inline: false,
+      }
+    );
+  let Buttons = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId("START")
+      .setLabel("Start!")
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId("JOIN")
+      .setLabel("Join!")
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId("LEAVE")
+      .setLabel("Leave!")
+      .setStyle(ButtonStyle.Primary)
+  );
+  if(!i.replied){
+  i.reply({
+    embeds: [embed],
+    ephemeral: false,
+    components: [Buttons],
+  });
+}
+  else{
+    i.editReply({
       embeds: [embed],
       ephemeral: false,
       components: [Buttons],
-    })
-    const collector = interaction.channel.createMessageComponentCollector();
-    collector.on("collect", async i => {
-        
-        if (i.user.id !== interaction.user.id) {
-            return;
-        }
-        if (i.message.interaction.id !== interaction.id) {
-            return
-        }
-        if (i.customId === "JOIN") {
-            addPlayer(i, interaction);
-            collector.stop();
-        }
-    });
-    collector.on('end', collected => console.log(`Collected ${collected.size} items`));
-}
-
-function searchGame(interaction) {
-  var searchCriteria = { gameid: interaction.user.id };
-
-  var foundGame = games.find((obj) => {
-    return Object.entries(searchCriteria).every(([key, value]) => {
-      return obj.hasOwnProperty(key) && obj[key] === value;
-    });
-  });
-  return foundGame;
+    }); 
+  }
 }

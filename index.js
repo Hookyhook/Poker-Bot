@@ -1,5 +1,5 @@
 const token =
-  "MTA2NjcxNDUwNDk1MzU5Mzg4Ng.Gn_tVb.Pc5rP5EQqUJCbAApKicHfu80QpIfaDM-d4y8K4";
+  "MTA2NjcxNDUwNDk1MzU5Mzg4Ng.GN1wjQ.0KDmb4WfXghADObSJXbrGO2mKyUF3ATtXRpZ5Q";
 const applicationID = "1066714504953593886";
 
 const {
