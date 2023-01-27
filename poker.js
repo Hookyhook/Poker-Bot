@@ -26,9 +26,10 @@ exports.gameStart = (interaction) => {
   collector.on("collect", async (i) => {
     if (i.customId === "JOIN") {
       addPlayer(i, interaction, game);
+      console.log(game);
     }
     if (i.customId === "LEAVE") {
-      removePlayer(i, interaction, game);
+     removePlayer(i, interaction, game);
     }
   });
   collector.on("end", (collected) =>
@@ -166,55 +167,58 @@ function checkforPlayer(interaction) {
 
 function removePlayer(i, interaction, game) {
   var joined = false;
-  searchValue = {id: i.user.id};
-  game.members = game.members.filter(obj => obj.name !== searchValue);
+  
   var embed;
   for (const member of game.members) {
     if ((member.id == i.user.id)) {
       joined = true;
     }
   }
-  if (!joined) {
-     embed = new EmbedBuilder()
-    .setColor("Red")
-    .setTitle("You left the game")
-    .addFields(
-      {
-        name: "Poker Game",
-        value: "You left the game!",
-        inline: false,
-      }
-      
-    );
-    //i.replied = true;
-    //updateStartMessage(i, interaction, game);
-  } else {
-     embed = new EmbedBuilder()
+  if (game.gameid == i.user.id) {
+    embed = new EmbedBuilder()
     .setColor("Red")
     .setTitle("Error")
     .addFields(
       {
         name: "Poker Game",
-        value: "You can'not leave a game you did never join!",
+        value: "You can'not leave a game you created!",
         inline: false,
       }
     );
   }
-  if(i.replied){
+  else if (!joined) {
+    searchValue = i.user.id;
+    game.members.filter((obj) => obj.memberid !== searchValue);
+    embed = new EmbedBuilder()
+      .setColor("Red")
+      .setTitle("You left the game")
+      .addFields(
+        {
+          name: "Poker Game",
+          value: "You left the game!",
+          inline: false,
+        }
+      
+      );
+  } else {
+    embed = new EmbedBuilder()
+      .setColor("Red")
+      .setTitle("Error")
+      .addFields(
+        {
+          name: "Poker Game",
+          value: "You can'not leave a game you did never join!",
+          inline: false,
+        }
+      );
+  }
+  
+  updateStartMessage(i, interaction, game);
     i.followUp({
       embeds: [embed],
       ephemeral: true,
       components: [],
     });
-  }else{
-    i.reply({
-      embeds: [embed],
-      ephemeral: true,
-      components: [],
-    });
-  }
-  console.log(game.members);
-
 }
 
 function updateStartMessage(i, interaction, game){
@@ -251,18 +255,12 @@ function updateStartMessage(i, interaction, game){
       .setLabel("Leave!")
       .setStyle(ButtonStyle.Primary)
   );
-  if(!i.replied){
-  i.reply({
+  i.replied = false;
+  i.update({
     embeds: [embed],
     ephemeral: false,
     components: [Buttons],
   });
+  i.replied = true;
 }
-  else{
-    i.editReply({
-      embeds: [embed],
-      ephemeral: false,
-      components: [Buttons],
-    }); 
-  }
-}
+
