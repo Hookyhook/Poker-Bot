@@ -52,7 +52,7 @@ client.on("interactionCreate", async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
   if (interaction.commandName === "startgame") {
-    poker.gameStart(interaction);
+    poker.gameStart(interaction, client);
   }
 });
 client.login(token);
