@@ -14,9 +14,13 @@ const {
   Events,
   Collector,
   Collection,
+  ThreadMemberFlagsBitField,
 } = require("discord.js");
+const { determineHandRanking } = require("./evaluation");
 
 let registeredUsers = [];
+
+
 
 exports.gameStart = (interaction, client) => {
   var game;
@@ -33,30 +37,31 @@ exports.gameStart = (interaction, client) => {
         break;
       case "START":
         newRound(i, interaction, game, client);
+
         break;
       case "FOLD":
-        fold(i, interaction, game);
-        break;
-      case "CHECK":
-        check(i, interaction, game);
+        setBet(i, game, 0, "Fold", client, interaction);
         break;
       case "RAISE":
-        raiseOptions(i, interaction, game);
+        raiseOptions(i, interaction, game, client, interaction);
+
         break;
-      case "CALL":
-        call(i, interaction, game);
+      case "CHECK":
+        setBet(i, game, game.highestbet, "Check", client, interaction);
+
         break;
       case "1":
-        raise(i, interaction, game, 1);
+        setBet(i, game, (i.customId+game.highestbet), "Raised by " + i.customId+"$", client, interaction);
         break;
       case "5":
-        raise(i, interaction, game, 5);
+        setBet(i, game, (i.customId+game.highestbet), "Raised by " + i.customId+"$", client, interaction);
+
         break;
       case "10":
-        raise(i, interaction, game, 10);
+        setBet(i, game, (i.customId+game.highestbet), "Raised by " + i.customId+"$", client, interaction);
         break;
       case "50":
-        raise(i, interaction, game, 50);
+        setBet(i, game, (i.customId+game.highestbet), "Raised by " + i.customId+"$", client, interaction);
         break;
     }
   });
@@ -71,13 +76,16 @@ function newGame(interaction, game) {
     var table = createTable(deck);
     var gameid = interaction.user.id;
     var members = [];
+    var hand = dealHand(deck); 
     var member = {
       username: interaction.user.username,
       memberid: interaction.user.id,
-      hand: dealHand(deck),
+      hand: hand,
       interaction: interaction,
-      bet: 0,
-      turn: false
+      bet: -1,
+      turn: true,
+      action: "Waiting",
+      evaluation: determineHandRanking(hand, table).join('')
     };
     members.push(member);
     var game = {
@@ -87,7 +95,8 @@ function newGame(interaction, game) {
       table: table,
       status: 0,
       pot: 0,
-      highestbet: 0
+      highestbet: 0,
+      startinteraction: 0,
     };
     var embed = new EmbedBuilder()
       .setColor("Black")
@@ -187,14 +196,17 @@ function addPlayer(i, interaction, game) {
       joined = true;
     }
   }
+  var hand = dealHand(game.deck);
   if (!joined) {
     game.members.push({
       username: i.user.username,
-      meberid: i.user.id,
-      hand: dealHand(game.deck),
+      memberid: i.user.id,
+      hand: hand,
       interaction: i,
-      bet: 0,
-      turn: false
+      bet: -1,
+      turn: false,
+      action: "Waiting",
+      evaluation: determineHandRanking(hand, game.table).join('') 
     });
     updateStartMessage(i, interaction, game);
   } else {
@@ -210,6 +222,7 @@ function addPlayer(i, interaction, game) {
       components: [],
     });
   }
+  console.log(game);
 }
 
 function checkforPlayer(interaction) {
@@ -267,7 +280,7 @@ function removePlayer(i, interaction, game) {
 function updateStartMessage(i, interaction, game) {
   var usernames = "";
   for (const member of game.members) {
-    usernames += member.username + "\n";
+    usernames += member.username + ": " + member.action + "\n";
   }
   const embed = new EmbedBuilder()
     .setColor("Black")
@@ -307,12 +320,23 @@ function updateStartMessage(i, interaction, game) {
   i.replied = true;
 }
 function newRound(i, interaction, game, client) {
-  game.status = 1;
+  game.status++;
+  if (game.status == 1) {
+    game.startinteraction = i;
+  }
   game.highestbet = 0;
+  for (const member of game.members) {
+    member.bet = -1;
+    member.action = "waiting";
+  }
   var usernames = "";
   var cards = "";
   for (const member of game.members) {
-    usernames += member.username + "\n";
+    if (member.turn) {
+      usernames += "**"+member.username+"**" + ": "+member.action+"\n";
+    }else{
+      usernames += member.username +  ": "+member.action+"\n";
+    }
   }
   if (game.status == 1) {
     for (let index = 0; index < 5; index++) {
@@ -342,23 +366,39 @@ function newRound(i, interaction, game, client) {
         inline: false,
       },
       {
+        name: "Round:",
+        value: game.status + " ",
+        inline: false
+      },
+      {
         name: "Cards:",
         value: cards,
         inline: false,
+      },
+      {
+        name: "Pot: ",
+        value: game.pot +"$",
+        inline: false
       }
     );
-  i.replied = false;
-  i.update({
-    embeds: [embed],
-    ephemeral: false,
-    components: [],
-  });
-  i.replied = true;
-  sendHand(i, interaction, game, client);
+
+  if (game.status == 1) {
+    game.startinteraction.update({
+      embeds: [embed],
+      ephemeral: false,
+      components: [],
+    });
+    sendHand(i, interaction, game, client);
+  } else {
+    game.startinteraction.editReply({
+      embeds: [embed],
+      ephemeral: false,
+      components: [],
+    });
+  }
 }
 
 function sendHand(i, interaction, game, client) {
-  const channel = client.channels.cache.get(interaction.channelId);
   for (const member of game.members) {
     const embed = new EmbedBuilder()
       .setColor("White")
@@ -377,10 +417,6 @@ function sendHand(i, interaction, game, client) {
         .setCustomId("CHECK")
         .setLabel("Check!")
         .setStyle(ButtonStyle.Primary),
-        new ButtonBuilder()
-        .setCustomId("CALL")
-        .setLabel("Call!")
-        .setStyle(ButtonStyle.Primary),
       new ButtonBuilder()
         .setCustomId("RAISE")
         .setLabel("Raise!")
@@ -396,23 +432,7 @@ function sendHand(i, interaction, game, client) {
     });
   }
 }
-function fold(i, interaction, game) {
-  searchValue = i.user.id;
-  game.members.filter((obj) => obj.memberid !== searchValue);
-  const embed = new EmbedBuilder()
-    .setColor("Red")
-    .setTitle("Fold!")
-    .addFields({
-      name: "Poker Game",
-      value: "<@" + i.user.id + "> folded!",
-      inline: false,
-    });
-  i.reply({
-    embeds: [embed],
-    components: [],
-  });
-  compareBet(i, game)
-}
+
 function raiseOptions(i, interaction, game) {
   const embed = new EmbedBuilder()
     .setColor("Grey")
@@ -425,85 +445,130 @@ function raiseOptions(i, interaction, game) {
   let Buttons = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId("1")
-      .setLabel("1")
+      .setLabel("1$")
       .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
       .setCustomId("5")
-      .setLabel("5")
+      .setLabel("5$")
       .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
       .setCustomId("10")
-      .setLabel("10")
+      .setLabel("10$")
       .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
       .setCustomId("50")
-      .setLabel("50")
+      .setLabel("50$")
       .setStyle(ButtonStyle.Primary)
   );
   i.reply({
     embeds: [embed],
-    ephemeral: true,
     components: [Buttons],
+    ephemeral: true,
   });
-}
-function raise(i, interaction, game, value) { 
-  const embed = new EmbedBuilder()
-    .setColor("Grey")
-    .setTitle("Raise!")
-    .addFields({
-      name: "Poker Game",
-      value: "<@" + i.user.id + "> raised by: "+value,
-      inline: false,
-    });
-  i.reply({
-    embeds: [embed],
-    components: [],
-  });
-  setBet(i, game, value);
-  compareBet(i, game)
-}
-function check(i, interaction, game) {
-  const embed = new EmbedBuilder()
-    .setColor("Grey")
-    .setTitle("Call!")
-    .addFields({
-      name: "Poker Game",
-      value: "<@" + i.user.id + "> checked!",
-      inline: false,
-    });
-  i.reply({
-    embeds: [embed],
-    components: [],
-  });
-  setBet(i, game, 0);
-  compareBet(i, game)
-}
-function call(i, interaction, game) {
-  const embed = new EmbedBuilder()
-  .setColor("Grey")
-  .setTitle("Call!")
-  .addFields({
-    name: "Poker Game",
-    value: "<@" + i.user.id + "> called!",
-    inline: false,
-  });
-i.reply({
-  embeds: [embed],
-  components: [],
-});
-  setBet(i, game, game.highestbet);
-  compareBet(i, game)
 }
 
-function setBet(i,game, bet) {
+function setBet(i, game, bet, action, client, interaction) {
+  var turn = false;
   for (const member of game.members) {
-    if (i.user.id == member.memberid) {
-      member.bet = bet;
+    if (i.user.id == member.memberid && member.turn) {
+      turn = true;
     }
+  }
+  if (turn) {
+    for (const member of game.members) {
+      if (i.user.id == member.memberid) {
+        const index = game.members.indexOf(member);
+        game.members[index].turn = false;
+        const nextIndex = (index + 1) % game.members.length;
+        game.members[nextIndex].turn = true;
+        member.action = action;
+        member.bet = bet;
+        game.pot = (parseInt(bet)+parseInt(game.pot))/10;
+      }
+      if (bet > game.highestbet) {
+        game.highestbet = bet;
+      }
+      var usernames = "";
+      var cards = "";
+      for (const member of game.members) {
+        if (member.turn) {
+          usernames += "**"+member.username+"**" + ": "+member.action+"\n";
+        }else{
+          usernames += member.username +  ": "+member.action+"\n";
+        }
+      }
+      if (game.status == 1) {
+        for (let index = 0; index < 5; index++) {
+          cards += ":white_large_square:" + " ";
+        }
+      } else {
+        cards =
+          game.table.card1 +
+          " " +
+          game.table.card2 +
+          " " +
+          game.table.card3 +
+          " ";
+        if (game.status >= 3) {
+          cards += game.table.card4 + " ";
+          if (game.status == 4) {
+            cards += game.table.card5 + " ";
+          } else {
+            cards += ":white_large_square:" + " ";
+          }
+        } else {
+          cards += ":white_large_square: :white_large_square:" + " ";
+        }
+      }
+      var embed = new EmbedBuilder()
+        .setColor("Black")
+        .setTitle("Game Started")
+        .addFields(
+          {
+            name: "Players:",
+            value: usernames,
+            inline: false,
+          },
+          {
+            name: "Round:",
+            value: game.status + " ",
+            inline: false
+          },
+          {
+            name: "Cards:",
+            value: cards,
+            inline: false,
+          },
+          {
+            name: "Pot: ",
+            value: game.pot +"$",
+            inline: false
+          }
+      );
+      game.startinteraction.editReply({
+        embeds: [embed],
+        components: [],
+      });
+      compareBet(i, interaction, game, client);
+    }
+  } else if(!turn){
+    const embed = new EmbedBuilder()
+      .setColor("Red")
+      .setTitle("Error")
+      .addFields({
+        name: "Poker Game",
+        value: "It is not you turn!!! please wait",
+        inline: false,
+      });
+    i.reply({
+      embeds: [embed],
+      ephemeral: true,
+      components: [],
+    });
   }
 }
 
-function compareBet(i, game) {
+function compareBet(i, interaction, game, client) {
   var complete = true;
   for (const member of game.members) {
     if (member.bet != game.highestbet) {
@@ -511,6 +576,7 @@ function compareBet(i, game) {
     }
   }
   if (complete) {
-    newRound();
+    newRound(i, interaction, game, client);
   }
 }
+
