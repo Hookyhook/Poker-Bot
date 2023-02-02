@@ -1,3 +1,15 @@
+var table = {
+  card1: ':spades: 9',
+  card2: ':hearts: 5',
+  card3: ':clubs: J',
+  card4: ':diamonds: 2',
+  card5: ':diamonds: A'
+}
+var cards = {
+  card1: ':diamonds: 9',
+  card2: ':clubs: 5',
+}
+
 
 exports.determineHandRanking = (hand, communityCards) => {
   //Prepares the hand from an object two an array
@@ -11,10 +23,10 @@ exports.determineHandRanking = (hand, communityCards) => {
   const suits = allCards.map((card) => card.split(":")[1]);
   //Converts non numeric values in the cards to numbers according to their value
   const cardValues = values.map((value) => {
-    if (value === "J") return 11;
-    if (value === "Q") return 12;
-    if (value === "K") return 13;
-    if (value === "A") return 14;
+    if (value === " J") return 11;
+    if (value === " Q") return 12;
+    if (value === " K") return 13;
+    if (value === " A") return 14;
     return parseInt(value);
   });
   //Fills a new Array with 14 0
@@ -72,11 +84,11 @@ exports.determineHandRanking = (hand, communityCards) => {
   const hasStraightFlush = isFlush && isStraight;
   const hasStraight = isStraight;
   //We return now numeric values according of the value of the hand
-  if (hasRoyalFlush) return [10];
+  if (hasRoyalFlush) return [10, ...cardValues.sort((a, b) => b - a)];
   /*We include also the card values from the highest to the lowest to include
   the so called kicker system which is used to compare cards
   */
-  if (hasStraightFlush) return [9, Math.max(...cardValues)];
+  if (hasStraightFlush) return [9, ...cardValues.sort((a, b) => b - a)];
   /*In this case we also look for the value of the four of a kind
   by looking in the count array for the value of the cards with four of a kind
   */
@@ -96,13 +108,13 @@ exports.determineHandRanking = (hand, communityCards) => {
     return [
       7,
       threeOfAKindValue,
-      cardValues.filter((value) => value !== threeOfAKindValue).pop(),
+      cardValues.filter((value) => value !== threeOfAKindValue),
     ];
   }
   //Returns with the flush rank also all card values in descending order
   if (isFlush) return [6, ...cardValues.sort((a, b) => b - a)];
   //In the case of a straight we only include the highest number
-  if (hasStraight) return [5, Math.max(...cardValues)];
+  if (hasStraight) return [5, ...cardValues.sort((a, b) => b - a)];
   //Determines the value of the Three Of A Kind and the rest of the cards without the cards included in the four of a kind
   if (hasThreeOfAKind) {
     const threeOfAKindValue = cardValues.find(
@@ -139,3 +151,4 @@ exports.determineHandRanking = (hand, communityCards) => {
   //If with have nothing we just return the highest values
   return [1, ...cardValues.sort((a, b) => b - a)];
 };
+
