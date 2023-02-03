@@ -16,6 +16,7 @@ const {
   Collection,
   ThreadMemberFlagsBitField,
   BaseSelectMenuBuilder,
+  InviteGuild,
 } = require("discord.js");
 const { determineHandRanking } = require("./evaluation");
 
@@ -23,7 +24,6 @@ let registeredUsers = [];
 
 exports.gameStart = (interaction, client) => {
   var game = {};
-  console.log(game);
   game = newGame(interaction, game);
   const collector = interaction.channel.createMessageComponentCollector();
   collector.on("collect", async (i) => {
@@ -32,7 +32,7 @@ exports.gameStart = (interaction, client) => {
         addPlayer(i, interaction, game);
         break;
       case "LEAVE":
-        removePlayer(i, interaction, game);
+        removePlayer(i, interaction, game, true);
         break;
       case "START":
         if (i.user.id == game.gameid && game.members.length >= 2) {
@@ -121,6 +121,16 @@ exports.gameStart = (interaction, client) => {
           }
         }
         break;
+        case "ALLIN":
+          setBet(
+            i,
+            game,
+            0,
+            "ALLIN",
+            client,
+            interaction
+          );
+        break
     }
   });
   collector.on("end", (collected) =>
@@ -144,7 +154,8 @@ function newGame(interaction, game) {
       turn: true,
       action: "Waiting",
       evaluation: evaluateHand(hand, table),
-      balance: 300
+      balance: 100,
+      lastbalance: 100,
     };
     members.push(member);
     var game = {
@@ -235,7 +246,8 @@ function addPlayer(i, interaction, game) {
       turn: false,
       action: "Waiting",
       evaluation: evaluateHand(hand, game.table),
-      balance: 300
+      balance: 100,
+      lastbalance: 100,
     });
     updateStartMessage(i, interaction, game);
   } else {
@@ -251,7 +263,6 @@ function addPlayer(i, interaction, game) {
       components: [],
     });
   }
-  console.log(game.members);
 }
 
 function checkforPlayer(interaction) {
@@ -264,7 +275,7 @@ function checkforPlayer(interaction) {
   return joined;
 }
 
-function removePlayer(i, interaction, game) {
+function removePlayer(i, interaction, game, pregame) {
   var joined = false;
 
   var embed;
@@ -273,7 +284,7 @@ function removePlayer(i, interaction, game) {
       joined = true;
     }
   }
-  if (game.gameid == i.user.id) {
+  if (game.gameid == i.user.id && pregame) {
     embed = new EmbedBuilder().setColor("Red").setTitle("Error").addFields({
       name: "Poker Game",
       value: "You can't leave a game you created!",
@@ -282,7 +293,6 @@ function removePlayer(i, interaction, game) {
   } else if (!joined) {
     searchValue = i.user.id;
     game.members = game.members.filter((obj) => obj.memberid !== searchValue);
-    console.log(game.members);
     embed = new EmbedBuilder()
       .setColor("Red")
       .setTitle("You left the game")
@@ -298,8 +308,9 @@ function removePlayer(i, interaction, game) {
       inline: false,
     });
   }
-
+  if(pregame){
   updateStartMessage(i, interaction, game);
+  }
   i.followUp({
     embeds: [embed],
     ephemeral: true,
@@ -372,6 +383,7 @@ function newRound(i, interaction, game, client) {
     member.bet = 0;
     member.action = "waiting";
     member.turn = false;
+    member.lastbalance = member.balance;
   }
   game.members[0].turn = true;
   var usernames = "";
@@ -462,8 +474,8 @@ function sendHand(i, member, game, raiseOptions) {
         inline: false,
       },
       {
-          name: "Your Balance",
-          value: member.balance +"$"
+        name: "Your Balance",
+        value: member.balance + "$",
       }
     );
   let normalButtons = new ActionRowBuilder().addComponents(
@@ -479,11 +491,10 @@ function sendHand(i, member, game, raiseOptions) {
       .setCustomId("RAISE")
       .setLabel("Raise!")
       .setStyle(ButtonStyle.Primary),
-      new ButtonBuilder()
+    new ButtonBuilder()
       .setCustomId("ALLIN")
       .setLabel("All In!")
       .setStyle(ButtonStyle.Primary)
-    
   );
   let raiseButtons = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -530,6 +541,7 @@ function sendHand(i, member, game, raiseOptions) {
 
 function setBet(i, game, bet, action, client, interaction) {
   var turn = false;
+  var allin = false;
   for (const member of game.members) {
     if (i.user.id == member.memberid && member.turn) {
       turn = true;
@@ -538,15 +550,42 @@ function setBet(i, game, bet, action, client, interaction) {
   if (turn) {
     for (const member of game.members) {
       if (i.user.id == member.memberid) {
+        if (bet >= member.lastbalance && action != "ALLIN") {
+          const embed = new EmbedBuilder()
+            .setColor("Red")
+            .setTitle("Money")
+            .addFields({
+              name: "Poker Game",
+              value: "You have not enough money",
+              inline: false,
+            });
+            i.reply({
+              embeds: [embed],
+              ephemeral: true
+            })
+            return;
+        }
+        if(action == "Fold"){
+          console.log("works");
+          removePlayer(i, interaction, game, false);
+          if(game.members.length == 1){
+            endGame(i, interaction, game);
+          }
+          return;
+        }
         const index = game.members.indexOf(member);
         game.members[index].turn = false;
         const nextIndex = (index + 1) % game.members.length;
         game.members[nextIndex].turn = true;
         member.action = action;
-        member.balance = member.balance-2*(member.bet)-bet;
+        if(action == "ALLIN"){
+          bet = member.lastbalance;
+          allin = true;
+        }
+        member.balance = member.lastbalance - bet;
         member.bet = bet;
-        game.pot = (parseInt(bet) + parseInt(game.pot));
-        
+        game.pot = parseInt(bet) + parseInt(game.pot);
+
         sendHand(i, member, game, false);
       }
       if (bet > game.highestbet) {
@@ -614,7 +653,7 @@ function setBet(i, game, bet, action, client, interaction) {
         embeds: [embed],
         components: [],
       });
-      compareBet(i, interaction, game, client);
+      compareBet(i, interaction, game, client, allin);
     }
   } else if (!turn) {
     const embed = new EmbedBuilder()
@@ -633,14 +672,18 @@ function setBet(i, game, bet, action, client, interaction) {
   }
 }
 
-function compareBet(i, interaction, game, client) {
+function compareBet(i, interaction, game, client, allin) {
   var complete = true;
+  
   for (const member of game.members) {
     if (member.bet != game.highestbet || member.action == "waiting") {
       complete = false;
     }
   }
   if (complete) {
+    if(allin){
+      game.status = 4;
+    }
     newRound(i, interaction, game, client);
   }
 }
@@ -653,38 +696,49 @@ function endGame(i, interaction, game) {
     return [...prev, current];
   }, []);
   var winners = highestevaluation.map((member) => member.username).join(" ");
+  var win = game.pot/highestevaluation.length;
   const embed = new EmbedBuilder()
     .setColor("Green")
     .setTitle("Winner")
-    .addFields({
-      name: "Poker Game",
-      value: `Congrats: ${winners} won the game!!!`,
-      inline: false,
-    },
-    {
-      name: "Table",
-      value: game.table.card1 + game.table.card2+ game.table.card3+ game.table.card4+ game.table.card5,
-      inline: false,
+    .addFields(
+      {
+        name: "Poker Game",
+        value: `Congrats: ${winners} + ${win}$  won the game!!!`,
+        inline: false,
+      },
+      {
+        name: "Table",
+        value:
+          game.table.card1 +
+          game.table.card2 +
+          game.table.card3 +
+          game.table.card4 +
+          game.table.card5,
+        inline: false,
       },
       {
         name: "Cards",
-        value: game.members.map(member => {
-          return {
-            username: member.username,
-            card1: member.hand.card1,
-            card2: member.hand.card2
-          };
-        }).map(memberData => {
-          return `${memberData.username}:  ${memberData.card1} ${memberData.card2}\n`;
-        }).join(" "),
+        value: game.members
+          .map((member) => {
+            return {
+              username: member.username,
+              card1: member.hand.card1,
+              card2: member.hand.card2,
+            };
+          })
+          .map((memberData) => {
+            return `${memberData.username}:  ${memberData.card1} ${memberData.card2}\n`;
+          })
+          .join(" "),
         inline: false,
-      },
+      }
     );
   game.startinteraction.followUp({
     embeds: [embed],
     components: [],
   });
   registeredUsers = [];
+  game = {};
 }
 
 function evaluateHand(hand, table) {
