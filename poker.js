@@ -19,24 +19,26 @@ const {
   InviteGuild,
 } = require("discord.js");
 const { determineHandRanking } = require("./evaluation");
+const pm2 = require("pm2");
 
 let registeredUsers = [];
+var game = {};
 
 exports.gameStart = (interaction, client) => {
-  var game = {};
-  game = newGame(interaction, game);
+  
+  newGame(interaction);
   const collector = interaction.channel.createMessageComponentCollector();
   collector.on("collect", async (i) => {
     switch (i.customId) {
       case "JOIN":
-        addPlayer(i, interaction, game);
+        addPlayer(i, interaction);
         break;
       case "LEAVE":
-        removePlayer(i, interaction, game, true);
+        removePlayer(i, interaction, true);
         break;
       case "START":
         if (i.user.id == game.gameid && game.members.length >= 2) {
-          newRound(i, interaction, game, client);
+          newRound(i, interaction, client);
         } else if (i.user.id != game.gameid) {
           var embed = new EmbedBuilder()
             .setColor("Red")
@@ -60,23 +62,23 @@ exports.gameStart = (interaction, client) => {
         }
         break;
       case "FOLD":
-        setBet(i, game, 0, "Fold", client, interaction);
+        setBet(i,  0, "Fold", client, interaction);
         break;
       case "RAISE":
         for (const member of game.members) {
           if (i.user.id == member.memberid) {
-            sendHand(i, member, game, true);
+            sendHand(i, member, true);
           }
         }
         break;
       case "CHECK":
-        setBet(i, game, game.highestbet, "Check", client, interaction);
+        setBet(i,  game.highestbet, "Check", client, interaction);
 
         break;
       case "1":
         setBet(
           i,
-          game,
+          
           parseInt(i.customId) + parseInt(game.highestbet),
           "Raised by " + i.customId + "$",
           client,
@@ -86,7 +88,7 @@ exports.gameStart = (interaction, client) => {
       case "5":
         setBet(
           i,
-          game,
+          
           parseInt(i.customId) + parseInt(game.highestbet),
           "Raised by " + i.customId + "$",
           client,
@@ -97,7 +99,7 @@ exports.gameStart = (interaction, client) => {
       case "10":
         setBet(
           i,
-          game,
+          
           parseInt(i.customId) + parseInt(game.highestbet),
           "Raised by " + i.customId + "$",
           client,
@@ -107,7 +109,7 @@ exports.gameStart = (interaction, client) => {
       case "50":
         setBet(
           i,
-          game,
+          
           parseInt(i.customId) + parseInt(game.highestbet),
           "Raised by " + i.customId + "$",
           client,
@@ -117,14 +119,14 @@ exports.gameStart = (interaction, client) => {
       case "BACK":
         for (const member of game.members) {
           if (i.user.id == member.memberid) {
-            sendHand(i, member, game, false);
+            sendHand(i, member,  false);
           }
         }
         break;
         case "ALLIN":
           setBet(
             i,
-            game,
+            
             0,
             "ALLIN",
             client,
@@ -138,7 +140,7 @@ exports.gameStart = (interaction, client) => {
   );
 };
 
-function newGame(interaction, game) {
+function newGame(interaction) {
   if (!checkforPlayer(interaction)) {
     var deck = createDeck();
     var table = createTable(deck);
@@ -158,7 +160,7 @@ function newGame(interaction, game) {
       lastbalance: 100,
     };
     members.push(member);
-    var game = {
+    game = {
       gameid: gameid,
       members: members,
       deck: deck,
@@ -170,9 +172,8 @@ function newGame(interaction, game) {
       firsthands: true,
     };
     i = undefined;
-    updateStartMessage(i, interaction, game);
+    updateStartMessage(i, interaction);
     registeredUsers.push(interaction.user.id);
-    return game;
   } else {
     var embed = new EmbedBuilder().setColor("Red").setTitle("Error").addFields({
       name: "Channel Error",
@@ -228,7 +229,7 @@ function dealHand(d) {
   return { card1: d.pop(), card2: d.pop() };
 }
 
-function addPlayer(i, interaction, game) {
+function addPlayer(i, interaction) {
   var joined = false;
   for (const member of game.members) {
     if (i.user.id == member.memberid) {
@@ -249,14 +250,14 @@ function addPlayer(i, interaction, game) {
       balance: 100,
       lastbalance: 100,
     });
-    updateStartMessage(i, interaction, game);
+    updateStartMessage(i, interaction);
   } else {
     var embed = new EmbedBuilder().setColor("Red").setTitle("Error").addFields({
       name: "Poker Game",
       value: "You already joined that game!",
       inline: false,
     });
-    updateStartMessage(i, interaction, game);
+    updateStartMessage(i, interaction);
     i.followUp({
       embeds: [embed],
       ephemeral: true,
@@ -275,7 +276,7 @@ function checkforPlayer(interaction) {
   return joined;
 }
 
-function removePlayer(i, interaction, game, pregame) {
+function removePlayer(i, interaction, pregame) {
   var joined = false;
 
   var embed;
@@ -309,7 +310,7 @@ function removePlayer(i, interaction, game, pregame) {
     });
   }
   if(pregame){
-  updateStartMessage(i, interaction, game);
+  updateStartMessage(i, interaction);
   }
   i.followUp({
     embeds: [embed],
@@ -318,7 +319,7 @@ function removePlayer(i, interaction, game, pregame) {
   });
 }
 
-function updateStartMessage(i, interaction, game) {
+function updateStartMessage(i, interaction) {
   var usernames = "";
   for (const member of game.members) {
     usernames += member.username + ": " + member.action + "\n";
@@ -369,10 +370,10 @@ function updateStartMessage(i, interaction, game) {
     });
   }
 }
-function newRound(i, interaction, game, client) {
+function newRound(i, interaction, client) {
   game.status++;
   if (game.status == 5) {
-    endGame(i, interaction, game);
+    endGame(i, interaction);
     return;
   }
   if (game.status == 1) {
@@ -446,7 +447,7 @@ function newRound(i, interaction, game, client) {
       components: [],
     });
     for (member of game.members) {
-      sendHand(i, member, game, false);
+      sendHand(i, member, false);
     }
     game.firsthands = false;
   } else {
@@ -458,7 +459,7 @@ function newRound(i, interaction, game, client) {
   }
 }
 
-function sendHand(i, member, game, raiseOptions) {
+function sendHand(i, member, raiseOptions) {
   const embed = new EmbedBuilder()
     .setColor("White")
     .setTitle("Your hand")
@@ -539,7 +540,7 @@ function sendHand(i, member, game, raiseOptions) {
   }
 }
 
-function setBet(i, game, bet, action, client, interaction) {
+function setBet(i, bet, action, client, interaction) {
   var turn = false;
   var allin = false;
   for (const member of game.members) {
@@ -566,10 +567,9 @@ function setBet(i, game, bet, action, client, interaction) {
             return;
         }
         if(action == "Fold"){
-          console.log("works");
-          removePlayer(i, interaction, game, false);
+          removePlayer(i, interaction, false);
           if(game.members.length == 1){
-            endGame(i, interaction, game);
+            endGame(i, interaction);
           }
           return;
         }
@@ -586,7 +586,7 @@ function setBet(i, game, bet, action, client, interaction) {
         member.bet = bet;
         game.pot = parseInt(bet) + parseInt(game.pot);
 
-        sendHand(i, member, game, false);
+        sendHand(i, member, false);
       }
       if (bet > game.highestbet) {
         game.highestbet = bet;
@@ -653,7 +653,7 @@ function setBet(i, game, bet, action, client, interaction) {
         embeds: [embed],
         components: [],
       });
-      compareBet(i, interaction, game, client, allin);
+      compareBet(i, interaction, client, allin);
     }
   } else if (!turn) {
     const embed = new EmbedBuilder()
@@ -672,7 +672,7 @@ function setBet(i, game, bet, action, client, interaction) {
   }
 }
 
-function compareBet(i, interaction, game, client, allin) {
+function compareBet(i, interaction, client, allin) {
   var complete = true;
   
   for (const member of game.members) {
@@ -684,11 +684,11 @@ function compareBet(i, interaction, game, client, allin) {
     if(allin){
       game.status = 4;
     }
-    newRound(i, interaction, game, client);
+    newRound(i, interaction, client);
   }
 }
 
-function endGame(i, interaction, game) {
+async function endGame(i, interaction) {
   var highestevaluation = game.members.reduce((prev, current) => {
     if (prev.length === 0) return [current];
     if (prev[0].evaluation > current.evaluation) return prev;
@@ -733,12 +733,16 @@ function endGame(i, interaction, game) {
         inline: false,
       }
     );
-  game.startinteraction.followUp({
+  await game.startinteraction.followUp({
     embeds: [embed],
     components: [],
   });
-  registeredUsers = [];
-  game = {};
+   // restart the bot process
+   pm2.restart("2", (err, apps) => {
+    if (err) throw err;
+
+    console.log("Bot restarted successfully");
+  });
 }
 
 function evaluateHand(hand, table) {
