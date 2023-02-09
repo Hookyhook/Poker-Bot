@@ -281,6 +281,7 @@ function addPlayer(i, interaction) {
       components: [],
     });
   }
+  console.log(game);
 }
 
 //Checks whether a player is already registered in the registeredUser array
@@ -750,6 +751,7 @@ function compareBet(i, interaction, client, allin) {
 }
 //This function ends the game
 async function endGame(i, interaction) {
+  console.log(game);
   //The players who have the highest evaluation are determined
   var highestevaluation = game.members.reduce((prev, current) => {
     if (prev.length === 0) return [current];
