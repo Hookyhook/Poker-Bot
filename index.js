@@ -1,6 +1,6 @@
 //This is the discord token for the bot it is not public so it is empty
 const token =
-  "MTA2NjcxNDUwNDk1MzU5Mzg4Ng.GuPVpz.i_ToxlaEo7sUck-WMh6l-d_C5-lWQV6FZR19yg";
+  "MTA2NjcxNDUwNDk1MzU5Mzg4Ng.Griv_b.bZukDoaCa9hy46l4HxvFjM4aHKhCKrGEFwyNQE";
 const applicationID = "1066714504953593886";
 
 //Importing needed parts of the discord api
